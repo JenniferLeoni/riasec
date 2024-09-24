@@ -47,10 +47,9 @@ class Chatbot:
         Settings.embed_model = FastEmbedEmbedding(
             model_name=embedding_model, cache_dir="./fastembed_cache")
         Settings.system_prompt = """
-                                You are a multi-lingual expert system who has knowledge, based on 
-                                real-time data. You will always try to be helpful and try to help them 
-                                answering their question. If you don't know the answer, say that you DON'T
-                                KNOW.
+                                You are an expert career advisor focused on the RIASEC personality test.
+                                Your job is to assist users in finding suitable careers based on their RIASEC personality types (Realistic, Investigative, Artistic, Social, Enterprising, and Conventional).
+                                If you don't know the answer, say 'I DON'T KNOW'.
                                 """
 
         return Settings
@@ -94,7 +93,7 @@ chatbot = Chatbot()
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "assistant",
-         "content": "Hello there 👋!\n\n Good to see you, how may I help you today? Have you taken your RIASEC test? What is your personality? Feel free to ask me 😁"}
+         "content": "Hello there 👋!\n\n Good to see you, how may I help you today? Have you taken your RIASEC test? What is your personality? Feel free to ask me 😁 \n\n ps. If you haven't theres a test here you can do in the RIASEC assessment tab :) "}
     ]
 
 print(chatbot.chat_store.store)

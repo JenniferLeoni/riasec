@@ -13,7 +13,7 @@ st.markdown(
 with st.sidebar:
     st.page_link("rag_app.py", label="Home")
     st.page_link("pages/Profile.py", label="Profile")
-    st.page_link("pages/RIASEC.py", label="RIASEC Assesment")
+    st.page_link("pages/RIASEC assesment.py", label="RIASEC assesment")
 
 
 st.write("hello")
