@@ -18,16 +18,9 @@ from llama_index.core.node_parser import HierarchicalNodeParser, get_leaf_nodes,
 from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.core.chat_engine import CondensePlusContextChatEngine
 
+import pandas as pd
 
 
-# CONTEXT_PROMPT = """You are an expert system with knowledge of interview questions.
-# These are documents that may be relevant to user question:\n\n
-# {context_str}
-# If you deem this piece of information is relevant, you may use it to answer user. 
-# Else then you can say that you DON'T KNOW."""
-
-# CONDENSE_PROMPT = """
-# """
 
 class Chatbot:
     def __init__(self, llm="llama3.1:latest", embedding_model="intfloat/multilingual-e5-large", vector_store=None):
@@ -42,6 +35,17 @@ class Chatbot:
         # Chat Engine
         self.chat_engine = self.create_chat_engine(self.index)
 
+        # Load RIASEC results
+        self.riasec_results = self.load_riasec_results()
+
+    def load_riasec_results(self):
+        try:
+            df = pd.read_csv('docs/riasec_results.csv')
+            results = df.set_index('Type').to_dict()['Score']
+            return results
+        except FileNotFoundError:
+            return None
+
     def set_setting(_arg, llm, embedding_model):
         Settings.llm = Ollama(model=llm, base_url="http://127.0.0.1:11434")
         Settings.embed_model = FastEmbedEmbedding(
@@ -51,7 +55,6 @@ class Chatbot:
                                 Your job is to assist users in finding suitable careers based on their RIASEC personality types (Realistic, Investigative, Artistic, Social, Enterprising, and Conventional).
                                 If you don't know the answer, say 'I DON'T KNOW'.
                                 """
-
         return Settings
 
     @st.cache_resource(show_spinner=False)
@@ -80,23 +83,28 @@ class Chatbot:
             retriever=index.as_retriever(),
             llm=Settings.llm
         )
-        # return index.as_chat_engine(chat_mode="condense_plus_context", chat_store_key="chat_history", memory=self.memory, verbose=True)
 
+    def generate_personalized_response(self, prompt):
+        if self.riasec_results:
+            riasec_info = f"Your RIASEC type scores are: {self.riasec_results}."
+        else:
+            riasec_info = "It seems you haven't taken the RIASEC test yet."
 
+        combined_prompt = f"{riasec_info}\n\n{prompt}"
+        response = self.chat_engine.chat(combined_prompt)
+        return response.response
 
 
 # Main Program
-st.title("Simple RAG Chatbot for RIASEC career plan with Streamlit")
+st.title("Simple RAG Chatbot for RIASEC Career Plan with Streamlit")
 chatbot = Chatbot()
 
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "assistant",
-         "content": "Hello there 👋!\n\n Good to see you, how may I help you today? Have you taken your RIASEC test? What is your personality? Feel free to ask me 😁 \n\n ps. If you haven't theres a test here you can do in the RIASEC assessment tab :) "}
+         "content": "Hello there 👋!\n\n Good to see you, how may I help you today? Have you taken your RIASEC test? What is your personality? Feel free to ask me 😁 \n\n ps. If you haven't there's a test here you can do in the RIASEC assessment tab :) "}
     ]
-
-print(chatbot.chat_store.store)
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
@@ -106,13 +114,6 @@ for message in st.session_state.messages:
 chatbot.set_chat_history(st.session_state.messages)
 
 # React to user input
-# if prompt := st.chat_input("What is up?"):
-#     # Display user message in chat message container
-#     with st.chat_message("user"):
-#         st.markdown(prompt)
-#     # Add user message to chat history
-#     st.session_state.messages.append({"role": "user", "content": prompt})
-
 if prompt := st.chat_input("What is up?"):
     # Display user message in chat message container
     with st.chat_message("user"):
@@ -122,9 +123,9 @@ if prompt := st.chat_input("What is up?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
-        response = chatbot.chat_engine.chat(prompt)
-        st.markdown(response.response)
+        response = chatbot.generate_personalized_response(prompt)
+        st.markdown(response)
 
-    # Add user message to chat history
+    # Add assistant message to chat history
     st.session_state.messages.append(
-        {"role": "assistant", "content": response.response})
+        {"role": "assistant", "content": response})
