@@ -40,7 +40,7 @@ class Chatbot:
 
     def load_riasec_results(self):
         try:
-            df = pd.read_csv('docs/riasec_results.csv')
+            df = pd.read_csv('docs/riasec_scores.csv')
             results = df.set_index('Type').to_dict()['Score']
             return results
         except FileNotFoundError:
