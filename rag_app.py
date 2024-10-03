@@ -7,7 +7,7 @@ from llama_index.core.storage.storage_context import StorageContext
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 
-from llama_index.core.llms import ChatMessage
+from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.storage.chat_store import SimpleChatStore
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.retrievers import VectorIndexRetriever
@@ -19,7 +19,6 @@ from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.core.chat_engine import CondensePlusContextChatEngine
 
 import pandas as pd
-
 
 
 class Chatbot:
@@ -46,7 +45,7 @@ class Chatbot:
         except FileNotFoundError:
             return None
 
-    def set_setting(_arg, llm, embedding_model):
+    def set_setting(self, llm, embedding_model):
         Settings.llm = Ollama(model=llm, base_url="http://127.0.0.1:11434")
         Settings.embed_model = FastEmbedEmbedding(
             model_name=embedding_model, cache_dir="./fastembed_cache")
@@ -58,7 +57,7 @@ class Chatbot:
         return Settings
 
     @st.cache_resource(show_spinner=False)
-    def load_data(_arg, vector_store=None):
+    def load_data(_self, vector_store=None):  # Renamed 'self' to '_self'
         with st.spinner(text="Loading and indexing – hang tight! This should take a few minutes."):
             # Read & load document from folder
             reader = SimpleDirectoryReader(input_dir="./docs", recursive=True)
@@ -81,14 +80,33 @@ class Chatbot:
             verbose=True,
             memory=self.memory,
             retriever=index.as_retriever(),
-            llm=Settings.llm
+            llm=Settings.llm,
+            system_prompt=Settings.system_prompt,
+            context_prompt=(
+                "You are an expert career advisor guiding users based on RIASEC personality types. "
+                "Use the RIASEC scores from the CSV file to assist users in selecting careers. "
+                "If no score is available, guide the user to take the test. \n\n{context_str}"
+                "If no score and no test and the user stated their RIASEC personality type, save their type, assist users in selecting careers based on their type."
+            ),
+            condense_prompt="""
+                Given the conversation (between User and Assistant) and a follow-up message from the User, 
+                transform the follow-up into an independent question that includes all relevant context from the previous chat history. 
+                Keep the question short. Example: "What is the best career for someone with an Artistic score?" 
+                
+                <Chat History>
+                {chat_history}
+                
+                <Follow Up Message>
+                {question}
+                
+                <Standalone question>"""
         )
 
     def generate_personalized_response(self, prompt):
         if self.riasec_results:
             riasec_info = f"Your RIASEC type scores are: {self.riasec_results}."
         else:
-            riasec_info = "It seems you haven't taken the RIASEC test yet."
+            riasec_info = "What is your RIASEC type? Have you known or do you need to take the test?"
 
         combined_prompt = f"{riasec_info}\n\n{prompt}"
         response = self.chat_engine.chat(combined_prompt)
@@ -105,6 +123,20 @@ if "messages" not in st.session_state:
         {"role": "assistant",
          "content": "Hello there 👋!\n\n Good to see you, how may I help you today? Have you taken your RIASEC test? What is your personality? Feel free to ask me 😁 \n\n ps. If you haven't there's a test here you can do in the RIASEC assessment tab :) "}
     ]
+
+# Initialize the chat engine
+if "chat_engine" not in st.session_state.keys():
+    init_history = [
+        ChatMessage(role=MessageRole.ASSISTANT, content="Hello there 👋! How can I assist you today?")
+    ]
+    memory = ChatMemoryBuffer.from_defaults(token_limit=16000)
+    st.session_state.chat_engine = CondensePlusContextChatEngine(
+        verbose=True,
+        memory=memory,
+        system_prompt=Settings.system_prompt,
+        retriever=chatbot.index.as_retriever(),
+        llm=Settings.llm
+    )
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
